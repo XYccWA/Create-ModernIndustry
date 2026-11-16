@@ -1,0 +1,165 @@
+name: 构建与发布
+
+# 触发条件
+#   1. push 到 main / 任意 PR  -> 只构建 + 上传产物，不发布
+#   2. push v* 开头的 tag      -> 构建后自动创建 GitHub Release
+#   3. 手动 workflow_dispatch  -> 只构建（调试用）
+#
+# 版本号来源：tag 触发时取 tag 名去掉 v（如 v0.1.0 -> 0.1.0），
+# 其它情况取 gradle.properties 里的 mod_version，并通过 -Pmod_version 覆盖，
+# 保证 jar 文件名与 neoforge.mods.toml 里的版本一致。
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# 同一分支/PR 上后一次提交会取消前一次构建；tag 发布不取消，避免发版中断
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+# 创建 Release / 上传附件需要写权限（只在 release 任务里要，build 任务只读）
+env:
+  JAVA_VERSION: "21"
+
+jobs:
+  build:
+    name: 构建
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # fetch-depth: 0 —— 完整历史，tag 相关信息与版本判断都依赖它
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # git 里 gradlew 可能没有可执行位（Windows 上提交的），这里补一次
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # 官方 Gradle 配置：自带依赖 / wrapper / 构建缓存
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 读取模组信息
+        id: info
+        run: |
+          set -e
+          MOD_ID=$(grep -E "^mod_id[[:space:]]*=" gradle.properties | head -n1 | cut -d'=' -f2 | tr -d ' \r')
+          if [ -z "$MOD_ID" ]; then MOD_ID="create_modern_industry"; fi
+
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            SOURCE="tag"
+          else
+            VERSION=$(grep -E "^mod_version[[:space:]]*=" gradle.properties | head -n1 | cut -d'=' -f2 | tr -d ' \r')
+            SOURCE="gradle.properties"
+          fi
+          if [ -z "$VERSION" ]; then VERSION="0.0.1"; fi
+
+          echo "mod_id=$MOD_ID" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=${MOD_ID}-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "版本来源: $SOURCE"
+          echo "mod_id=$MOD_ID  version=$VERSION"
+
+      # 用 tag 版本覆盖 mod_version，使 jar 名与 mods.toml 内的版本都等于发布版本
+      - name: 构建 jar
+        run: |
+          set -e
+          ./gradlew --no-daemon clean build -Pmod_version=${{ steps.info.outputs.version }}
+
+      # datagen 守门：本工程的方块模型/战利品表/语言/配方都是 runData 生成的，
+      # 代码改了却忘记跑 runData 会让线上资源与代码不一致，这里直接判红。
+      - name: 校验 datagen 产物已同步
+        run: |
+          set -e
+          ./gradlew --no-daemon runData -Pmod_version=${{ steps.info.outputs.version }}
+          if ! git diff --quiet -- src/generated; then
+            echo "::error::src/generated 与代码不同步：请在本地执行 gradlew runData 后把生成结果一起提交"
+            git --no-pager diff --stat -- src/generated
+            exit 1
+          fi
+          echo "datagen 产物与代码一致"
+
+      - name: 列出构建产物
+        run: ls -l build/libs/
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-jars
+          path: build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: 发布 Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 直接复用 build 任务产出的 jar，避免重复构建
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-jars
+          path: dist
+
+      - name: 读取发布版本
+        id: info
+        run: |
+          set -e
+          MOD_ID=$(grep -E "^mod_id[[:space:]]*=" gradle.properties | head -n1 | cut -d'=' -f2 | tr -d ' \r')
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "release_name=${MOD_ID}-${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # 发布说明优先取 tag 注释正文：
+      #   git tag -a v0.1.0 -m "v0.1.0" -m "## 更新内容 ..." --cleanup=verbatim
+      # 没写注释时回退为 GitHub 自动生成的 Release Notes。
+      - name: 读取 tag 发布说明
+        id: notes
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}" || true
+          git tag -l "$TAG" --format='%(contents:body)' > RELEASE_NOTES.md
+          echo "--- RELEASE_NOTES.md ($(wc -c < RELEASE_NOTES.md) 字节) ---"
+          head -n 10 RELEASE_NOTES.md
+          if [ -s RELEASE_NOTES.md ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "已从 tag 注释读取发布说明"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "该 tag 未写发布说明，将回退为自动生成"
+          fi
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.info.outputs.release_name }}
+          body_path: ${{ steps.notes.outputs.found == 'true' && 'RELEASE_NOTES.md' || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.found == 'false' }}
+          files: dist/*.jar
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -194,6 +194,38 @@ public static final ItemEntry<Item> MY_ITEM = CreateModernIndustry.REGISTRATE
 - 材料标签统一挂 `c:` 命名空间（例：`c:ingots/modern_steel`）。
 - 所有路径相关字符串用 `CreateModernIndustry.asResource(path)` 生成。
 
+## CI 与发布流程
+
+工作流：[`.github/workflows/build.yml`](.github/workflows/build.yml)
+
+| 事件 | 行为 |
+| --- | --- |
+| push 到 `main` / 任意 PR | 构建校验 + 上传 `mod-jars` 产物（Actions 页面可下载），**不发版** |
+| push `v*` tag | 构建 → 发布 GitHub Release，附件为 `build/libs/*.jar` |
+| 手动 `workflow_dispatch` | 只构建（调试用） |
+
+构建任务里有两道额外守门：
+
+1. **版本一致性**：tag 触发时用 tag 名（去掉 `v`）覆盖 `mod_version`，
+   保证 jar 文件名与 `neoforge.mods.toml` 里的版本都等于发布版本。
+2. **datagen 同步检查**：跑一遍 `gradlew runData`，若 `src/generated` 与代码不一致直接判红
+   —— 改代码后忘了 `runData` 会在 CI 上暴露，而不是等玩家发现模型/语言缺失。
+
+### 发版方式
+
+```powershell
+# 1. 版本号改到 gradle.properties 的 mod_version（用于非 tag 构建）
+# 2. 打带说明的 tag（正文会成为 Release 说明；--cleanup=verbatim 防止 # 开头行被当注释丢掉）
+git tag -a v0.1.0 -m "v0.1.0" -m "## 更新内容
+- 初始化工程骨架
+- 工业机壳 / 现代钢锭" --cleanup=verbatim
+git push origin v0.1.0
+```
+
+tag 推送后 Actions 自动构建并创建 Release；若 tag 没写说明，会自动生成 Release Notes。
+
+---
+
 ## 许可证
 
 本项目基于 **GNU General Public License v3.0（GPL-3.0）** 发布，全文见根目录 [`LICENSE`](LICENSE)。
