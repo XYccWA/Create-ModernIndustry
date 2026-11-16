@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_modern_steel_ingot": {
+      "conditions": {
+        "items": [
+          {
+            "items": "create_modern_industry:modern_steel_ingot"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "create_modern_industry:industrial_casing"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_modern_steel_ingot"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "create_modern_industry:industrial_casing"
+    ]
+  }
+}

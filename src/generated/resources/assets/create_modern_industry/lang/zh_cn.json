@@ -1,0 +1,7 @@
+{
+  "block.create_modern_industry.industrial_casing": "工业机壳",
+  "item.create_modern_industry.modern_steel_ingot": "现代钢锭",
+  "itemGroup.create_modern_industry.main": "Create：现代工业",
+  "jei.create_modern_industry.industrial_casing": "由 8 个铁锭与 1 个现代钢锭合成的通用机壳，可作为建筑与机械外壳使用。",
+  "jei.create_modern_industry.modern_steel_ingot": "把铁锭送进高炉冶炼即可得到现代钢锭；它是现代工业产线的基础材料。"
+}

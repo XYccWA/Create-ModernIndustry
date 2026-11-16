@@ -1,0 +1,7 @@
+{
+  "block.create_modern_industry.industrial_casing": "Industrial Casing",
+  "item.create_modern_industry.modern_steel_ingot": "Modern Steel Ingot",
+  "itemGroup.create_modern_industry.main": "Create: Modern Industry",
+  "jei.create_modern_industry.industrial_casing": "Crafted from 8 iron ingots and 1 modern steel ingot. A general purpose casing for buildings and machines.",
+  "jei.create_modern_industry.modern_steel_ingot": "Smelt an iron ingot in a blast furnace to obtain a Modern Steel Ingot — the base material of this mod's production chain."
+}

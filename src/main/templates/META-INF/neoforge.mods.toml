@@ -1,0 +1,92 @@
+# ===========================================================================
+#  Create: Modern Industry — mod 元数据
+#  下文中的占位符由 build.gradle 的 generateModMetadata 任务展开
+# ===========================================================================
+
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+displayURL="https://github.com/XYccWA/Create-ModernIndustry"
+authors="XYccWA"
+description='''
+Create 的现代工业向附属模组：为机械动力补上现代化产线、机壳与航空配套设备。
+- 现代工业机壳与钢材基础材料
+- 与 Create: Aeronautics（Sable 物理 / Simulated 传动）软兼容
+- JEI 配方信息与 Ponder 教学场景接入
+'''
+
+# 本模组的 mixin 配置（当前为空骨架，后续按需往里加）
+[[mixins]]
+config="${mod_id}.mixins.json"
+
+# ---------------------------------------------------------------------------
+#  依赖声明
+#  软依赖统一用 optional + ordering=AFTER：缺失时本模组照常加载，
+#  存在时保证本模组的注册/事件在它们之后执行。
+# ---------------------------------------------------------------------------
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21.1.228,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+# Create 是硬前置（registrate / ponder 都由它提供）
+[[dependencies.${mod_id}]]
+    modId="create"
+    type="required"
+    versionRange="[6.0.10,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# ---- Create: Aeronautics 套件（软依赖）----
+# sable = 子层级/物理库，simulated = 传动与机械模拟，aeronautics = 航空内容本体，
+# offroad = 轮胎/载具内容。只声明 optional，玩家没装也完全不影响本模组。
+[[dependencies.${mod_id}]]
+    modId="sable"
+    type="optional"
+    versionRange="[2.0.0,3.0.0)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="simulated"
+    type="optional"
+    versionRange="[1.3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="aeronautics"
+    type="optional"
+    versionRange="[1.3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="offroad"
+    type="optional"
+    versionRange="[1.3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# ---- JEI（软依赖，仅客户端）----
+[[dependencies.${mod_id}]]
+    modId="jei"
+    type="optional"
+    versionRange="[19.0.0,)"
+    ordering="AFTER"
+    side="CLIENT"
